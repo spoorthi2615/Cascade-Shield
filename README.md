@@ -1,6 +1,6 @@
-# CascadeShield
+# Cascade Shield
 
-**CascadeShield** is an infrastructure cascade failure prediction system. It models how catastrophic failures (e.g., cyberattacks, physical faults) propagate across highly interconnected, multi-subsystem city grids (Power, Water, Traffic, Transit). 
+**Cascade Shield** is an infrastructure cascade failure prediction system. It models how catastrophic failures (e.g., cyberattacks, physical faults) propagate across highly interconnected, multi-subsystem city grids (Power, Water, Traffic, Transit). 
 
 By benchmarking Graph Neural Networks (GNNs) against Classical SEIR epidemiological models and zero-parameter topological heuristics, this project rigorously investigates the representational limits of graph learning on deterministic anomaly propagation.
 

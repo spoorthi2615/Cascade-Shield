@@ -4,7 +4,7 @@ import numpy as np
 
 def evaluate(model_or_baseline, test_loader, device=None, is_baseline=False):
     """
-    Unified Evaluation Harness for CascadeShield.
+    Unified Evaluation Harness for Cascade Shield.
     
     Accepts either:
     - CascadeNet (PyTorch model)

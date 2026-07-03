@@ -1,6 +1,6 @@
 # Reproducibility Guide: Representational Ceiling Results
 
-This document contains the exact commands used to generate the final performance ceiling numbers for CascadeShield.
+This document contains the exact commands used to generate the final performance ceiling numbers for Cascade Shield.
 
 ## 1. Naive Distance Heuristic
 The structural zero-parameter heuristic (inversely proportional to propagation-weighted shortest path) is hardcoded directly into the evaluation script. It acts as the performance upper bound (`0.9480` ROC-AUC) given the simulator's deterministic retry mechanics.

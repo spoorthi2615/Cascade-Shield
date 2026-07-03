@@ -15,7 +15,7 @@ from graph.schema import Node, Edge, NodeType, EdgeType
 def parse_opendss_feeder(master_dss_path: str) -> Tuple[List[Node], List[Edge]]:
     """
     Loads an OpenDSS master file and extracts the bus connectivity
-    into CascadeShield schema Nodes and Edges.
+    into Cascade Shield schema Nodes and Edges.
     """
     if not os.path.exists(master_dss_path):
         raise FileNotFoundError(f"DSS file not found: {master_dss_path}")

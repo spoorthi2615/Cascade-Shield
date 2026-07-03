@@ -158,7 +158,7 @@ def run_all_evaluations(args):
             # 1.0 / (weight + 1e-5)
             # In NetworkX, we need a weight function
             def weight_func(u, v, d):
-                # CascadeShield sets weight in d['weight']
+                # Cascade Shield sets weight in d['weight']
                 w = d.get('weight', 1.0)
                 return 1.0 / (w + 1e-5)
                 

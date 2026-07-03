@@ -21,7 +21,7 @@ for line in lines:
         query = urllib.parse.quote(title)
         url = f"https://api.crossref.org/works?query.title={query}&select=title,DOI&rows=3"
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'CascadeShield/1.0 (mailto:test@example.com)'})
+            req = urllib.request.Request(url, headers={'User-Agent': 'Cascade Shield/1.0 (mailto:test@example.com)'})
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode())
                 

@@ -1,11 +1,11 @@
 """
-FastAPI application entrypoint for CascadeShield dashboard backend.
+FastAPI application entrypoint for Cascade Shield dashboard backend.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import graph, cascade, chokepoint
 
-app = FastAPI(title="CascadeShield API")
+app = FastAPI(title="Cascade Shield API")
 
 app.add_middleware(
     CORSMiddleware,
