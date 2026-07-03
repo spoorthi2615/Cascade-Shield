@@ -172,7 +172,7 @@ function App() {
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="title-block">
-          <div className="title">CASCADESHIELD</div>
+          <div className="title">CASCADE SHIELD</div>
           <div className="subtitle">INFRASTRUCTURE CASCADE FAILURE PREDICTION</div>
         </div>
 
