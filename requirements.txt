@@ -1,0 +1,11 @@
+neo4j
+influxdb-client
+networkx
+simpy
+torch
+torch_geometric
+fastapi
+uvicorn
+opendssdirect.py
+pandapower
+scikit-learn

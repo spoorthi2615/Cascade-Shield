@@ -1,0 +1,7 @@
+Method,ROC-AUC,Precision@K (Spread),Containment Accuracy,Time MAE
+CascadeNet (Untrained),0.6356,0.1921,0.0000,41.16871
+CascadeNet,0.7689,0.4732,0.8333,4.7053695
+Classical SEIR,0.9576,0.7034,0.0000,3.168517
+Blind SEIR,0.6341,0.1720,1.0000,11.082031
+Static Centrality,0.5402,0.1252,0.0000,N/A (non-temporal)
+Isolated Anomaly,0.5266,0.1198,0.0000,N/A (non-temporal)
