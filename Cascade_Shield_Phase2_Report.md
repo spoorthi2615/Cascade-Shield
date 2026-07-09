@@ -21,6 +21,9 @@ Initial evaluations of `CascadeNet` utilizing Focal Loss revealed a degenerate b
 ### Transition to Pairwise Ranking Loss
 To break the model out of its class-imbalance timidity, we shifted the paradigm from absolute classification to **Pairwise Ranking Loss**. By rewarding the model for correctly ranking infected nodes higher than safe nodes *within the same graph*, the model was forced to learn the relative risk of propagation without being penalized for absolute scale.
 
+> [!WARNING]
+> **Methodology Caveat (Phase 2):** Although Pairwise Ranking Loss was engineered to solve the timidity problem, it was ultimately disabled (`lambda_rank=0.0`) during the verified Phase 2 training runs. The model trained purely on Focal Loss + MSE. The apparent success of the model was driven by the explicit distance feature (Feature 8) overriding the class imbalance, meaning this architectural transition, while implemented in the codebase, was not active in the final Phase 2 numbers.
+
 > [!NOTE]
 > **Unverified Early Pipeline:** Sections 1–3 of earlier report versions cited a "0.735 ± 0.033 ROC-AUC ceiling" measured on a 240-node dense synthetic graph, alongside numbers such as "0.9576 SEIR AUC" and "0.9480 Naive Distance AUC." A global search of the repository found **no training log, checkpoint metadata, or script output file** containing these numbers. They have been removed from this report. The experimental narrative above (timidity, ranking loss, winner's curse) describes genuine architectural work and code that exists in the repository, but the specific AUC figures that appeared alongside it could not be verified.
 
