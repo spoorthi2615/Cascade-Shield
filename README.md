@@ -11,14 +11,19 @@ By benchmarking Graph Neural Networks (GNNs) against Classical SEIR epidemiologi
 - **Pairwise Ranking Loss:** A bespoke GNN training paradigm designed to combat extreme class imbalance (91.8% safe nodes) by learning relative topological risk rather than absolute probabilities.
 - **Interactive SCADA Dashboard:** A React-based, control-room styled visualizer built with `react-force-graph-2d` for high-performance canvas rendering of complex cascades.
 
-## 📊 Evaluation & Results
+## 📊 Evaluation & Results (Phase 2)
 
-Extensive robustness testing (learning rate sweeps, capacity scaling up to 128-dim, and multi-seed controls) revealed a strict representational ceiling:
-- **GNN Representational Ceiling:** `0.735 ± 0.033` ROC-AUC.
-- **Classical SEIR Model:** `0.9576` ROC-AUC.
-- **Naive Distance Heuristic:** `0.9480` ROC-AUC.
+Following a rigorous Phase 2 audit, the pipeline evaluates cascade propagation on a 2,278-node tri-layer graph using real-world ICS telemetry origins (`PWR_111`-`114`).
 
-The GNN, while outperforming static centrality measures, hits a hard ceiling bounded by topological shortest-paths out-of-sample.
+- **GNN Representational Ceiling:** `0.9089 ± 0.0003` ROC-AUC | `0.6790 ± 0.0060` P@K
+- **Feedforward MLP (w/ Distance):** `0.9014` ROC-AUC
+- **Naive Distance Heuristic:** `0.8991` ROC-AUC | `0.6601` P@K
+- **GNN Feature 8 Ablation (No Distance):** `0.83-0.84` ROC-AUC (Unstable across seeds)
+- **MLP Ablation (No Distance):** `~0.56` ROC-AUC
+
+**Key Scientific Findings:**
+1. **Distance Dominance:** Topological shortest-path distance is the single strongest predictor of cascade propagation, achieving 0.8991 AUC purely via heuristic. The GNN's 0.9089 AUC is a marginal (+0.0098) improvement over this hardcoded topological proximity.
+2. **Message Passing as Structural Recovery:** When explicit distance is withheld, a standard MLP collapses to ~0.56 AUC. The GNN, however, powerfully recovers and approximates that structural proximity via message passing, lifting the AUC back to ~0.83-0.84, albeit exhibiting high instability and failing to smoothly converge within standard epoch budgets.
 
 ## 📁 Repository Structure
 
