@@ -46,29 +46,90 @@ spoorthipyadav@gmail.com
 \end{center}
 
 \vspace{2pt}
-\noindent\textbf{Abstract.} Graph Neural Networks (GNNs) are increasingly proposed for predicting cascading failures across critical infrastructure. However, their true representational advantage over simple distance-based heuristics on sparse spatial graphs remains underexplored. We introduce Cascade Shield, an evaluation framework that algorithmically fuses an IEEE 123-bus power benchmark with OpenStreetMap road networks to simulate deterministic anomaly propagation driven by Industrial Control System (ICS) telemetry. By benchmarking a 3-layer Graph Attention Network (GATv2) against a zero-parameter Dijkstra shortest-path heuristic and a distance-free feedforward Multi-Layer Perceptron (MLP), we expose a strict representational ceiling. The full GNN achieves 0.9089 ROC-AUC, offering only a marginal improvement (+0.0098) over the naive distance heuristic (0.8991 ROC-AUC). Crucially, an ablation study withholding the distance feature reveals that message passing primarily acts as structural recovery, lifting performance from the distance-free MLP baseline ($\sim$0.56) back to $\sim$0.83--0.84 ROC-AUC. We conclude that on deterministic spatial propagation tasks, explicit shortest-path distance explains nearly all predictive performance, while GNN message passing mechanically approximates this structural proximity when it is withheld.
+\noindent\textbf{Abstract.} Graph Neural Networks (GNNs) are increasingly proposed for predicting cascading failures across critical infrastructure. However, their true representational advantage over simple distance-based heuristics on sparse spatial graphs remains underexplored. We introduce Cascade Shield, an evaluation framework that algorithmically fuses an IEEE 123-bus power benchmark with OpenStreetMap road networks to simulate deterministic anomaly propagation driven by Industrial Control System (ICS) telemetry. By benchmarking a 3-layer Graph Attention Network (GATv2) against a zero-parameter Dijkstra shortest-path heuristic and a distance-free feedforward Multi-Layer Perceptron (MLP), we expose a strict representational ceiling. The full GNN achieves 0.9089 ROC-AUC, offering only a marginal improvement (+0.0098) over the naive distance heuristic (0.8991 ROC-AUC). Crucially, an ablation study withholding the distance feature reveals that message passing primarily acts as structural recovery, lifting performance from the distance-free MLP baseline ($\sim$0.56) back to $\sim$0.83--0.84 ROC-AUC. A further architectural test shows that coupling the GNN to a Monte Carlo SEIR simulator collapses to 0.5393 AUC when the edge-transmission head is left untrained, underscoring that apparent capability is highly sensitive to which objective is actually optimized. We conclude that on deterministic spatial propagation tasks, explicit shortest-path distance explains nearly all predictive performance, while GNN message passing mechanically approximates this structural proximity when it is withheld.
 
-\textbf{Keywords:} Graph Neural Networks $\cdot$ Cascading failures $\cdot$ Critical infrastructure $\cdot$ Shortest path heuristics $\cdot$ Representational limits
+\textbf{Keywords:} Graph Neural Networks $\cdot$ Cascading failures $\cdot$ Critical infrastructure $\cdot$ Shortest path heuristics $\cdot$ Representational limits $\cdot$ GATv2
 
 \section{Introduction}
-Modern cities operate as tightly coupled systems of systems, where localized failures in one network (e.g., the power grid) can trigger catastrophic cascades across dependent topologies. Recent literature has heavily favored Graph Neural Networks (GNNs) for modeling these propagation dynamics. However, the exact mechanism by which GNNs achieve high predictive accuracy on cascade graphs is often obfuscated by the complexity of the architecture. It remains an open question whether GNNs discover novel, high-dimensional propagation signatures, or simply learn to mechanically approximate localized topological distances.
+Modern cities operate as tightly coupled systems of systems, where localized failures in one network (e.g., the power grid) can trigger catastrophic cascades across dependent topologies -- traffic control, water pumping, and emergency communication alike. Recent literature has heavily favored Graph Neural Networks (GNNs) for modeling these propagation dynamics, motivated by their ability to aggregate information across arbitrary, non-Euclidean topologies. However, the exact mechanism by which GNNs achieve high predictive accuracy on cascade graphs is often obfuscated by the complexity of the architecture, the opacity of attention weights, and the absence of a trivial, training-free baseline in the reported comparisons. It remains an open question whether GNNs discover novel, high-dimensional propagation signatures, or simply learn to mechanically approximate localized topological distances that a shortest-path algorithm could compute directly, at zero training cost.
 
-This paper presents a rigorous empirical analysis characterizing exactly when GNNs add value beyond shortest-path heuristics. By constructing a synthetic tri-layer infrastructure graph driven by ICS telemetry and simulated discrete-event propagation, we systematically dismantle the components driving cascade prediction. Our results isolate the predictive power of explicit distance features from the structural recovery capabilities of graph convolution.
+This distinction matters operationally as well as scientifically. If a GNN's advantage over a Dijkstra-style heuristic is marginal, the case for deploying a trained, opaque, and comparatively expensive model in an operational SCADA or emergency-response pipeline weakens considerably -- particularly given that infrastructure operators already prize interpretability and auditability over raw predictive accuracy. Conversely, if message passing captures node-state information a pure distance calculation cannot, that capability is worth preserving and extending.
+
+This paper presents a rigorous empirical analysis characterizing exactly when GNNs add value beyond shortest-path heuristics. By constructing a synthetic tri-layer infrastructure graph driven by real ICS telemetry and simulated discrete-event propagation, we systematically dismantle the components driving cascade prediction: we isolate the predictive power of an explicit distance feature from the structural recovery capabilities of graph convolution, and we test what happens when a GNN is coupled to a downstream physical simulator rather than evaluated as a standalone ranker. Every reported number in this paper is traced to a specific script, checkpoint, or log, in the interest of reproducibility.
+
+\section{Related Work}
+\textbf{Cascading failures and network robustness.} Structural robustness of complex networks under random and targeted node removal was formalized by Albert et al.~\cite{albert2000error}, and Motter and Lai~\cite{motter2002cascade} showed that overload-based cascades can propagate through a network long after the initiating failure, driven purely by load redistribution rather than by any single catastrophic event. Buldyrev et al.~\cite{buldyrev2010catastrophic} extended this to interdependent networks, showing that coupling between layers (e.g., power and communication) can produce abrupt failures absent from either layer alone -- directly motivating multi-layer benchmarks such as ours.
+
+\textbf{Epidemic-style propagation models.} Compartmental models such as SEIR~\cite{kermack1927contribution}, originally developed for biological epidemics, are widely repurposed to model discrete-event contagion on arbitrary graphs, since the latent "exposed" state naturally captures a delay between compromise and active propagation -- a property we exploit in our simulator.
+
+\textbf{Graph neural networks for infrastructure.} Graph attention architectures, and GATv2~\cite{brody2022how} in particular, correct a static-attention limitation of the original GAT formulation by allowing attention coefficients to depend dynamically on both source and target node representations. GNNs have been applied to power-flow state estimation, fault localization, and contingency screening, but comparisons against training-free structural baselines are inconsistently reported, making it difficult to isolate genuine architectural gains from confounds in dataset construction.
+
+\textbf{Distance and centrality baselines.} On spatially embedded, sparse, planar-like graphs, distance- and centrality-based heuristics are known to be strong baselines for diffusion-style tasks~\cite{newman2010networks}; a Dijkstra shortest-path ranking is a natural, zero-parameter benchmark for cascade prediction, yet is rarely reported alongside GNN results in this literature. Our work directly addresses this gap.
 
 \section{Methodology: Synthetic Graph Fusion and Ground Truth}
 Cascade prediction models often suffer from a lack of publicly available, real-world topology and telemetry data, as such infrastructure details are heavily classified. To circumvent this, we generate a synthetic fusion of three distinct datasets to act as our evaluation benchmark.
 
 \subsection{Tri-Layer Topological Fusion}
-The base topology comprises 2,278 nodes:
+The base topology comprises 2,278 nodes and 5,535 edges (mean degree $\approx$2.4, an extremely sparse, planar-like graph):
 \begin{itemize}[noitemsep]
     \item \textbf{Power Layer:} Synthetic academic benchmark (IEEE 123-bus test feeder).
-    \item \textbf{Water Layer:} Synthetic pipe junctions acting as static feature padding.
-    \item \textbf{Road Layer:} Real geographic coordinates extracted from OpenStreetMap (OSM) for Udupi.
+    \item \textbf{Water Layer:} Synthetic pipe junctions acting as static feature padding -- the propagation simulator does not route cascades through this layer.
+    \item \textbf{Road Layer:} Real geographic coordinates extracted from OpenStreetMap (OSM) for Udupi, India.
 \end{itemize}
-Because the power and water nodes lack true geographic coordinates, they are assigned arbitrary $(x, y)$ positions within the OSM bounding box. Cross-layer edges are algorithmically generated via a nearest-neighbor Euclidean distance heuristic, connecting power and water nodes to the nearest road intersection within a 1000m threshold.
+Because the power and water nodes lack true geographic coordinates, they are assigned arbitrary $(x, y)$ positions within the OSM bounding box. Cross-layer edges are algorithmically generated via a nearest-neighbor Euclidean distance heuristic, connecting power and water nodes to the nearest road intersection within a 1000m threshold, with ties broken by array insertion order. This threshold was chosen heuristically; sensitivity at 500m and 2000m was computed but never used to retrain the reported models (Section~6). Figure~\ref{fig:pipeline} summarizes the full construction pipeline, from raw sources through to labeled scenarios.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.98\linewidth]{figs/pipeline_architecture.png}
+\caption{Cascade Shield construction pipeline. A real OSM road graph and the synthetic IEEE 123-bus feeder are spatially fused via nearest-neighbor matching ($\leq$1000m); real ICS/IPAL intrusion events are mapped onto four power nodes as cascade origins; a discrete-event SEIR simulator generates labeled propagation scenarios (700 train / 150 val / 150 test) on the resulting fixed 2,278-node graph.}
+\label{fig:pipeline}
+\end{figure}
 
 \subsection{Simulator Replication and ICS Telemetry}
-Ground truth cascade labels are generated by a discrete-event Susceptible-Exposed-Infected-Recovered (SEIR) simulator. The simulator is initialized using real IPAL/SCADA event logs containing authentic intrusion alerts. However, because the topology is synthetic, these real alerts are mapped arbitrarily onto four specific power nodes (PWR\_111 to PWR\_114). The propagation probabilities along edges are hardcoded scalar assumptions (e.g., Physical Dependency = 0.65). Consequently, the GNN is performing \emph{simulator replication}---learning a high-dimensional approximation of the deterministic rules we hand-coded---rather than predicting real physical failures.
+Ground truth cascade labels are generated by a discrete-event Susceptible-Exposed-Infected-Recovered (SEIR) simulator. The simulator is initialized using real IPAL/SCADA event logs containing authentic intrusion alerts. An audit of this raw log found that only four distinct entities carry ``Infected'' events in the available data; these real alerts are mapped onto four specific power nodes (\texttt{PWR\_111} to \texttt{PWR\_114}). This is a genuine data-availability limitation of the source telemetry, not an arbitrary synthetic design choice -- but it also means every scenario in the dataset originates from one of only four spatial footprints on a single fixed graph.
+
+Propagation probabilities along edges are hardcoded scalar assumptions -- Physical Dependency $=0.65$, Logical Dependency $=0.80$ -- chosen to keep simulated cascades large enough to be informative, rather than calibrated against any physical or epidemiological model. One Monte Carlo draw is generated per sampled scenario; convergence of the underlying SEIR distribution across repeated draws was not separately verified. Consequently, the GNN is performing \emph{simulator replication} -- learning a high-dimensional approximation of the deterministic rules we hand-coded -- rather than predicting real physical failures against externally validated ground truth.
+
+\subsection{Node Features}
+Each node is represented by a 9-dimensional feature vector, summarized in Table~\ref{tab:features}. Feature 8, the normalized Dijkstra distance from the cascade origin, is computed once via \texttt{networkx} prior to training and is, as shown in Section~6, the single dominant predictive signal in every experiment.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Node feature vector used by all models.}
+\label{tab:features}
+\begin{tabular}{@{}cll@{}}
+\toprule
+\textbf{Idx} & \textbf{Feature} & \textbf{Notes} \\ \midrule
+0 & Criticality & Randomized scalar, fixed per node, never ablated alone \\
+1--3 & Layer one-hot (power/water/road) & Static membership indicator \\
+4 & Transit indicator & Deprecated Phase-1 artifact; always zeroed \\
+5--6 & In-/out-degree & Normalized \\
+7 & Is-compromised & Binary origin marker \\
+8 & Normalized Dijkstra distance & Precomputed shortest path from origin; dominant feature \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\section{Model Architecture}
+CascadeNet is a 3-layer Graph Attention Network (GATv2)~\cite{brody2022how} with residual connections and a hidden size of 64. Table~\ref{tab:hyperparams} lists training hyperparameters. A pairwise ranking loss was implemented to counter the extreme class imbalance described in Section~5.2, but was disabled ($\lambda_{\text{rank}}=0$) in every verified run reported here; the model trains purely on Focal Loss plus a Softplus-activated MSE time-to-impact head, leaving the explicit distance feature to dominate the learning signal largely unopposed.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{CascadeNet training configuration.}
+\label{tab:hyperparams}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\ \midrule
+Architecture & 3-layer GATv2, residual connections \\
+Hidden size & 64 \\
+Optimizer & Adam, lr $=10^{-3}$ \\
+Batch size & 1 (native unbatched evaluation) \\
+Epochs & 100 \\
+Loss & Focal Loss + Softplus MSE (ranking term disabled) \\
+Seeds & $N=3$ (headline), $N=2$ (distance-ablation) \\ \bottomrule
+\end{tabular}
+\end{table}
 
 \section{Experimental Setup}
 \subsection{Baselines and Architecture}
@@ -76,16 +137,17 @@ We compare three distinct predictive paradigms on the exact same fused topology:
 \begin{enumerate}[noitemsep]
     \item \textbf{Naive Distance Heuristic:} A zero-parameter baseline that ranks nodes purely by their Dijkstra shortest-path distance from the cascade origin.
     \item \textbf{Distance-Free MLP:} A standard Multi-Layer Perceptron (Linear $\to$ ReLU $\to$ Linear) that receives local node features (criticality, degree, subsystem type) but lacks both explicit distance features and message-passing capabilities.
-    \item \textbf{GNN (CascadeNet):} A 3-layer Graph Attention Network (GATv2) with residual connections, evaluated both with and without the explicit distance feature.
+    \item \textbf{GNN (CascadeNet):} The 3-layer GATv2 network described above, evaluated both with and without the explicit distance feature.
 \end{enumerate}
+We additionally test a fourth, architectural configuration: a \textbf{Hybrid Engine} in which the GNN's learned edge-transmission probabilities are fed directly into the Monte Carlo SEIR simulator in place of the hardcoded scalars, to test whether the GNN can substitute for the hand-tuned propagation constants (Section~6.3).
 
 \subsection{Metrics and Class Imbalance}
-Cascading failures present extreme class imbalance (in our datasets, 91.8\% of nodes remain safe). While Focal Loss alongside Mean Squared Error (MSE) mitigates total score suppression, raw thresholding fails. We report ROC-AUC to benchmark overall discriminative capacity, paired with Precision@K (P@K) to capture performance on the exact fraction of nodes that truly fail in each scenario. Pairwise Ranking Loss was engineered to counter class-imbalance, but was ultimately disabled ($\lambda_{\text{rank}}=0.0$) in the final training runs, leaving the explicit distance feature to override the imbalance organically.
+Cascading failures present extreme class imbalance (in our dataset, 91.8\% of nodes remain safe in a typical scenario). While Focal Loss alongside Mean Squared Error (MSE) mitigates total score suppression relative to plain cross-entropy, raw 0.5-threshold classification still fails to reflect ranking quality under this imbalance. We report ROC-AUC to benchmark overall discriminative capacity, paired with Precision@K (P@K), where $K$ is set per-scenario to the true number of infected nodes, to capture performance specifically on the fraction of nodes that actually fail. Scenarios are split 700 train / 150 validation / 150 test on the fixed graph; because all splits draw from the same four ICS origins, the test set functions as an interpolation test on known origins rather than a held-out generalization test (Section~7).
 
 \section{Results}
-We evaluate the models on a chronologically strictly partitioned set of scenarios, yielding the following core findings over an $N=3$ baseline training configuration (100 epochs, unbatched inference).
+We evaluate the models on a fixed partition of scenarios (700/150/150), reporting mean $\pm$ standard deviation over the $N=3$ baseline training configuration (100 epochs, unbatched inference) where applicable. Table~\ref{tab:main_results} and Figure~\ref{fig:headline} summarize the core comparison.
 
-\begin{table}[h]
+\begin{table}[ht]
 \centering
 \small
 \caption{Baseline versus GNN performance on the synthetic benchmark.}
@@ -101,20 +163,93 @@ MLP Ablation (Explicit Distance Removed) & $\sim$0.5649 & --- \\ \bottomrule
 \end{tabular}
 \end{table}
 
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.92\linewidth]{figs/headline_comparison.png}
+\caption{Phase 2 test-split ROC-AUC (a) and Precision@K (b) for the distance heuristic, a distance-fed MLP, and the full GNN. The GNN's margin over the training-free heuristic is small relative to what either could gain from better feature engineering.}
+\label{fig:headline}
+\end{figure}
+
 \subsection{Distance Dominance}
-As shown in Table~\ref{tab:main_results}, the zero-parameter Dijkstra heuristic establishes an overwhelmingly strong baseline of 0.8991 AUC. Providing the explicit distance feature to a feedforward MLP pushes performance to 0.9014 AUC. The full GATv2 architecture achieves 0.9089 AUC---a marginal improvement of just +0.0098 over the naive heuristic. We did not perform a formal feature attribution analysis, but this proves that topological shortest-path distance is the single most dominant predictor of cascade propagation on this static topology.
+As shown in Table~\ref{tab:main_results}, the zero-parameter Dijkstra heuristic establishes an overwhelmingly strong baseline of 0.8991 AUC. Providing the explicit distance feature to a feedforward MLP pushes performance to 0.9014 AUC, already exceeding the heuristic despite the MLP having no access to graph structure beyond that single scalar. The full GATv2 architecture achieves 0.9089 AUC -- a marginal improvement of just +0.0098 over the naive heuristic and +0.0075 over the distance-fed MLP. We did not perform a formal feature-attribution analysis to further decompose this residual gap, but the pattern is unambiguous: topological shortest-path distance is the single most dominant predictor of cascade propagation on this static topology, and most of the GNN's apparent skill is attributable to that one feature rather than to message passing.
 
 \subsection{Message Passing as Structural Recovery}
-When the explicit distance feature is withheld, the baseline MLP collapses to near-random performance ($\sim$0.56 AUC). However, the GNN powerfully recovers and approximates that structural proximity via message passing, lifting the AUC back to the $\sim$0.83--0.84 range. 
+When the explicit distance feature is withheld, the baseline MLP collapses to near-random performance ($\sim$0.56 AUC), confirming that none of the remaining eight features individually carry meaningful signal about propagation distance. The GNN, by contrast, powerfully recovers and approximates that structural proximity via message passing, lifting AUC back to the $\sim$0.83--0.84 range (Figure~\ref{fig:ablation}) -- a result that would not be possible without genuine information aggregation across graph neighborhoods, since the same eight non-distance features leave the MLP unable to do so.
 
-Notably, this structural recovery introduces massive instability. While the baseline GNN variance was $\pm$0.0003 across seeds, the distance-ablated GNN exhibits a $\Delta > 0.011$ across runs and fails to converge smoothly within standard 100-epoch budgets, oscillating violently.
+Notably, this structural recovery introduces substantial instability. While the baseline GNN's seed variance was $\pm$0.0003, the distance-ablated GNN exhibits a spread $\Delta > 0.011$ across just two seeds -- roughly 40$\times$ larger -- and fails to converge smoothly within the standard 100-epoch budget, oscillating visibly near its peak validation score up to the epoch limit. Whether a longer training budget (150--200 epochs) would close this gap or simply prolong the instability was not tested.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.8\linewidth]{figs/distance_ablation.png}
+\caption{Distance-feature ablation. Removing Feature 8 collapses the distance-free MLP to near-chance-adjacent performance ($\sim$0.56 AUC), while a GNN retrained without the feature recovers most of the gap (0.83--0.84 AUC) via message passing alone, still trailing the raw distance heuristic (dashed line).}
+\label{fig:ablation}
+\end{figure}
+
+\subsection{Architectural Coupling: The Hybrid Engine}
+We additionally tested a Hybrid Engine in which the GNN's edge-transmission probabilities directly replace the hardcoded SEIR scalars inside the Monte Carlo simulator, evaluated against GNN-only and SEIR-only baselines on a 50-scenario subset (Table~\ref{tab:hybrid}, Figure~\ref{fig:hybrid}). The Hybrid Engine collapses to 0.5393 AUC -- below both standalone components. The edge-transmission head is trained only under an explicit hybrid objective, and the checkpoint evaluated here was trained purely on node-level classification and ranking; its emitted edge probabilities are therefore effectively untrained noise, and feeding that noise into a Markov-chain-style simulator as literal transition probabilities produces cascades that diverge sharply from ground truth. This is a coupling failure specific to this checkpoint, not evidence against the hybrid approach in principle -- but it is a cautionary result for any pipeline that assumes a node-level-trained GNN's auxiliary outputs are usable off-the-shelf in a downstream physical simulator.
+
+\begin{table}[ht]
+\centering
+\small
+\caption{Architectural ablation of the GNN+SEIR hybrid engine (50-scenario subset, 1000m threshold).}
+\label{tab:hybrid}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Configuration} & \textbf{ROC-AUC} & \textbf{MAE (time-to-impact)} \\ \midrule
+GNN Only & 0.6941 & 164.27 \\
+SEIR Only & 0.8977 & N/A (non-temporal) \\
+Hybrid Engine (untrained edge head) & 0.5393 & 190.14 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.55\linewidth]{figs/hybrid_ablation.png}
+\caption{The GNN+SEIR hybrid engine collapses well below either component evaluated alone, because its edge-transmission head was never trained under a hybrid objective.}
+\label{fig:hybrid}
+\end{figure}
+
+\subsection{Validation-Test Gap and the Four-Origin Artifact}
+Figure~\ref{fig:valtest} shows an essentially zero validation-test gap across all three seeds (e.g., Seed 1: 0.9064 val vs. 0.9091 test). We attribute this to dataset construction rather than genuine generalization: because all scenarios -- train, validation, and test alike -- originate from the same four ICS-mapped power nodes on the same fixed graph, the test distribution is microscopically, not just macroscopically, identical to the validation distribution. Under this reading, the tight $\pm$0.0003 seed variance in Table~\ref{tab:main_results} reflects different random initializations converging on the same four spatial footprints, not robustness to unseen attack origins.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.72\linewidth]{figs/val_test_gap.png}
+\caption{Validation versus test ROC-AUC per seed. The near-zero gap follows directly from training and testing on cascades from the same four fixed origins, not from out-of-distribution robustness.}
+\label{fig:valtest}
+\end{figure}
 
 \section{Discussion and Scientific Validity}
-If the Dijkstra heuristic requires no training and performs nearly identically to the GNN, the practical necessity of deploying graph learning for static infrastructure prediction is highly questionable. However, the theoretical value of the GNN lies in its extensibility. A naive heuristic is blind to node states; a GNN could theoretically ingest live, dynamic sensor readings (e.g., pipeline pressure, voltage fluctuations) to predict propagation in domains where pure structural proximity fails.
+If the Dijkstra heuristic requires no training and performs nearly identically to the GNN, the practical necessity of deploying graph learning for static infrastructure prediction is highly questionable in this specific benchmark configuration. However, the theoretical value of the GNN lies in its extensibility: a naive heuristic is blind to node state, whereas a GNN could in principle ingest live, dynamic sensor readings -- pipeline pressure, voltage fluctuations, line temperature, real-time load -- to predict propagation in domains where pure structural proximity fails or is unavailable. Our benchmark, with only nine static features and no dynamic sensor stream, is not structured to exercise that advantage, and we consider this the most promising direction for a system that would need to genuinely outperform Dijkstra in an operational setting.
 
-\textbf{Limitations:} The conclusions drawn in this study are formally constrained to the specific arbitrary spatial fusion coordinates, the 1000m proximity threshold, and the hand-coded SEIR constants. Because the testing scenarios utilized the same 4 unique origin nodes as the training set, the zero val-test gap reflects dataset memorization rather than zero-shot generalization. Whether the principle of distance dominance and structural recovery holds across independently generated topologies or alternative physically-driven flow models remains an open question requiring extensive sensitivity analysis.
+It is also important to be precise about what the reported evaluation measures. Ground-truth infection labels are generated entirely by our own SEIR simulator; the model's task is to reproduce the behavior of hand-coded propagation rules, not to predict validated real-world infrastructure failures. High ROC-AUC in this setting is evidence of simulator replication capacity, not of predictive validity against physical cascades.
+
+\textbf{Limitations.} The conclusions drawn in this study are formally constrained to the specific arbitrary spatial fusion coordinates, the 1000m proximity threshold, and the hand-coded SEIR constants used to generate the benchmark. Because the testing scenarios utilize the same four unique origin nodes as the training set, the near-zero val-test gap reflects dataset memorization within a constrained label space rather than zero-shot generalization to novel attack origins. The 1000m Euclidean fusion threshold is also physically naive: real utility routing follows road right-of-ways and underground corridors, whereas nearest-neighbor Euclidean matching can connect infrastructure across buildings or other physically implausible paths. Whether the principle of distance dominance and structural recovery holds across independently generated topologies, alternative fusion thresholds, or physically-driven flow models (e.g., DC power-flow simulation in place of SEIR) remains an open question requiring extensive sensitivity analysis.
+
+\section{Future Work}
+Three directions follow directly from the limitations above. First, a multi-topology sensitivity sweep -- regenerating the tri-layer fusion under several independent random coordinate assignments and fusion thresholds (500m/1000m/2000m) -- would test whether the reported AUC gap between the GNN and the Dijkstra baseline is a property of cascade prediction in general or an artifact of this specific graph. Second, a formal statistical test (e.g., a paired bootstrap or Wilcoxon signed-rank test across more than three seeds) is needed before the +0.0098 AUC improvement can be treated as a reliably significant effect rather than a plausible but unverified one. Third, retraining the Hybrid Engine's edge-transmission head under its intended joint objective, and re-evaluating the chokepoint-immunization use case under that corrected checkpoint, would test whether the coupling failure in Section~6.3 is fixable or reflects a deeper mismatch between node-level and edge-level cascade objectives.
 
 \section{Conclusion}
-This study presents a rigorous empirical analysis exposing the representational limits of Graph Neural Networks on cascading failures. We demonstrate that on a synthetic infrastructure cascade benchmark, explicit shortest-path distance explains nearly all predictive performance (0.8991 AUC). While the GNN yields marginal improvements (0.9089 AUC), its primary mathematical function is to reconstruct structural proximity when explicit distance is withheld ($\sim$0.83 AUC vs. an MLP's $\sim$0.56). We conclude that future graph learning applications for critical infrastructure must benchmark against deterministic distance heuristics to legitimately isolate the value added by message passing.
+This study presents a rigorous empirical analysis exposing the representational limits of Graph Neural Networks on cascading failures. We demonstrate that on a synthetic infrastructure cascade benchmark, explicit shortest-path distance explains nearly all predictive performance (0.8991 AUC). While the GNN yields marginal improvements (0.9089 AUC), its primary mathematical function is to reconstruct structural proximity when explicit distance is withheld ($\sim$0.83 AUC vs. an MLP's $\sim$0.56), and this reconstruction comes with a roughly 40$\times$ increase in seed-to-seed variance relative to the distance-fed baseline. A further architectural test shows that coupling the same GNN to a downstream Monte Carlo simulator collapses performance entirely when the relevant output head is left untrained, underscoring that a model's apparent capability depends critically on which objective was actually optimized, not merely on its architecture. We conclude that future graph learning applications for critical infrastructure must benchmark against deterministic distance heuristics, and report which sub-objectives were and were not actively trained, in order to legitimately isolate the value added by message passing.
+
+\begin{thebibliography}{10}
+\small
+\setlength{\itemsep}{0.5pt}
+
+\bibitem{albert2000error} Albert, R., Jeong, H., Barab\'{a}si, A.L.: Error and attack tolerance of complex networks. Nature 406, 378--382 (2000)
+
+\bibitem{motter2002cascade} Motter, A.E., Lai, Y.C.: Cascade-based attacks on complex networks. Physical Review E 66, 065102 (2002)
+
+\bibitem{buldyrev2010catastrophic} Buldyrev, S.V., Parshani, R., Paul, G., Stanley, H.E., Havlin, S.: Catastrophic cascade of failures in interdependent networks. Nature 464, 1025--1028 (2010)
+
+\bibitem{kermack1927contribution} Kermack, W.O., McKendrick, A.G.: A contribution to the mathematical theory of epidemics. Proc. Royal Society A 115(772), 700--721 (1927)
+
+\bibitem{brody2022how} Brody, S., Alon, U., Yahav, E.: How attentive are graph attention networks? In: International Conference on Learning Representations (ICLR) (2022)
+
+\bibitem{newman2010networks} Newman, M.E.J.: Networks: An Introduction. Oxford University Press (2010)
+
+\bibitem{ieee123bus} IEEE PES Distribution System Analysis Subcommittee: IEEE 123-Bus Test Feeder. IEEE Power \& Energy Society
+
+\end{thebibliography}
 
 \end{document}
