@@ -14,15 +14,13 @@ from graph.build_topology import parse_opendss_feeder, build_networkx_graph, gen
 from baselines.classical_seir import ClassicalSEIRPredictor
 from baselines.static_centrality import StaticCentralityPredictor
 from baselines.isolated_anomaly_detector import IsolatedAnomalyPredictor
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'graph-engine'))
+from ingest import build_fused_graph
 
-def generate_static_topology():
+def generate_static_topology(threshold=1000):
     """Rebuilds the exact topology used during dataset generation."""
-    feeder_path = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "123Bus", "IEEE123Master.dss")
-    nodes, edges = parse_opendss_feeder(feeder_path)
-    base_power_G = build_networkx_graph(nodes, edges)
-    for n in base_power_G.nodes():
-        base_power_G.nodes[n]["subsystem"] = "power"
-    city_G = generate_synthetic_city(base_power_G, density_param=0.01, seed=42)
+    city_G = build_fused_graph(threshold)
     
     # We must match the node ordering exactly as serialized in create_base_tensors
     node_to_idx = {n: i for i, n in enumerate(city_G.nodes())}
@@ -31,7 +29,16 @@ def generate_static_topology():
     return city_G, node_to_idx, idx_to_node
 
 def run_all_evaluations(args):
-    data_dir = os.path.join(os.path.dirname(__file__), "..", "data", "processed")
+    if hasattr(args, 'data_dir') and args.data_dir:
+        data_dir = args.data_dir
+    else:
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "data", "processed", "1000m")
+        
+    threshold = 1000
+    if "500m" in data_dir: threshold = 500
+    elif "2000m" in data_dir: threshold = 2000
+    
+    city_G, node_to_idx, idx_to_node = generate_static_topology(threshold)
     _, _, test_graphs = load_datasets(data_dir, smoke_test=False)
     
     if args.smoke_test:
@@ -53,8 +60,8 @@ def run_all_evaluations(args):
     device = torch.device('cpu')
     hidden_dim = getattr(args, 'hidden_dim', 64)
     model = CascadeNet(in_channels=in_channels, edge_dim=4, hidden_dim=hidden_dim, num_layers=args.num_layers, heads=4, use_supernode=args.use_supernode)
-    best_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "best_model.pth")
-    ckpt_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "checkpoint_latest.pth")
+    best_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "width_64_seed_None", "best_model.pth")
+    ckpt_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "width_64_seed_None", "checkpoint_latest.pth")
     
     loaded_path = None
     if os.path.exists(best_path):
@@ -375,6 +382,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-layers", type=int, default=3, help="Number of layers in CascadeNet")
     parser.add_argument('--use-supernode', action='store_true', help='Use supernode architecture')
     parser.add_argument('--hidden-dim', type=int, default=64, help='Hidden dimension size')
+    parser.add_argument('--data-dir', type=str, default=None, help='Dataset directory')
     args = parser.parse_args()
     
     run_all_evaluations(args)

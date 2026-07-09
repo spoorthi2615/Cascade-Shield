@@ -47,7 +47,7 @@ class HybridSEIRPredictor(BaselinePredictor):
         self._cached_time = None
         self.is_temporal = True
 
-    def _ensure_simulations(self, graph: nx.Graph):
+    def _ensure_simulations(self, graph: nx.Graph, origin_node: str = None):
         # We need the current batch to perform GNN forward pass
         batch = getattr(self, "current_batch", None)
         if batch is None:
@@ -69,10 +69,19 @@ class HybridSEIRPredictor(BaselinePredictor):
                 return_edge_probs=True
             )
             
-        # 2. Identify predicted origin node blindly using argmax of node logits
+        # 2. Identify predicted origin node.
+        # If origin_node is passed by the evaluator, use it to ensure aligned simulations.
+        # Otherwise, fall back to guessing from GNN logits.
         N = batch.num_nodes
         origin_idx = torch.argmax(logits_clf[:N]).item()
-        origin_name = self.idx_to_node[origin_idx]
+        
+        if origin_node is not None:
+            origin_name = origin_node
+            # Find the idx of the provided origin_node for diagnostic logging
+            if hasattr(self, 'node_to_idx') and origin_name in self.node_to_idx:
+                origin_idx = self.node_to_idx[origin_name]
+        else:
+            origin_name = self.idx_to_node[origin_idx]
         
         # 3. Log diagnostic metrics for origin pick accuracy
         true_y = batch.y.cpu().numpy()
@@ -128,9 +137,9 @@ class HybridSEIRPredictor(BaselinePredictor):
         self._last_graph_id = id(graph)
 
     def predict(self, graph: nx.Graph, origin_node: str = None) -> Dict[str, float]:
-        self._ensure_simulations(graph)
+        self._ensure_simulations(graph, origin_node)
         return self._cached_risk
 
     def predict_time(self, graph: nx.Graph, origin_node: str = None) -> Dict[str, float]:
-        self._ensure_simulations(graph)
+        self._ensure_simulations(graph, origin_node)
         return self._cached_time

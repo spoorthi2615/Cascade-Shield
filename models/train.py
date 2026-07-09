@@ -56,13 +56,15 @@ def add_distance_feature(g):
     assert not np.any(np.isinf(dist_norm)), "Inf in distance feature"
     
     dist_tensor = torch.tensor(dist_norm, dtype=torch.float32).unsqueeze(1).to(g.x.device)
-    g.x = torch.cat([g.x, dist_tensor], dim=1)
+    
+    if not getattr(g, 'ablate_distance', False):
+        g.x = torch.cat([g.x, dist_tensor], dim=1)
     
     # Also save raw distance for naive heuristic baseline
     g.raw_weighted_dist = torch.tensor(dist, dtype=torch.float32)
     return g
 
-def load_datasets(data_dir: str, smoke_test: bool = False):
+def load_datasets(data_dir: str, smoke_test: bool = False, ablate_distance: bool = False):
     """
     Loads serialized PyG graphs and partitions them by the 'split' attribute.
     If smoke_test is true, loads only 5 train and 2 val graphs.
@@ -80,6 +82,7 @@ def load_datasets(data_dir: str, smoke_test: bool = False):
         try:
             # Must use weights_only=False for custom PyG objects
             g = torch.load(f, weights_only=False)
+            g.ablate_distance = ablate_distance
             g = add_distance_feature(g)
             if g.split == "train":
                 train_graphs.append(g)
@@ -163,27 +166,35 @@ def get_node_weights(batch, is_train=True):
     return node_weights, pos_mask.sum().item(), boundary_mask.sum().item(), background_mask.sum().item()
 
 def run_training(args):
-    # Kaggle vs Local paths
-    if os.path.exists("/kaggle/working/"):
-        base_dir = "/kaggle/working/"
-        data_dir = "/kaggle/input/cascade-shield-data/data/processed"
-        # If Kaggle input doesn't exist, maybe it's running locally on Kaggle without datasets attached yet
-        if not os.path.exists(data_dir):
-            data_dir = os.path.join(base_dir, "data", "processed")
+    if args.data_dir:
+        data_dir = args.data_dir
     else:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        data_dir = os.path.join(base_dir, "data", "processed")
-        
-    ckpt_dir = os.path.join(base_dir, "checkpoints")
+        # Kaggle vs Local paths
+        if os.path.exists("/kaggle/working/"):
+            base_dir = "/kaggle/working/"
+            data_dir = "/kaggle/input/cascade-shield-data/data/processed"
+            if not os.path.exists(data_dir):
+                data_dir = os.path.join(base_dir, "data", "processed")
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            data_dir = os.path.join(base_dir, "data", "processed", "1000m") # Default to 1000m
+            
+    if hasattr(args, 'save_dir') and args.save_dir:
+        ckpt_dir = args.save_dir
+    else:
+        seed_str = f"seed_{args.seed}" if getattr(args, 'seed', None) is not None else "seed_None"
+        hidden_dim = getattr(args, 'hidden_dim', 64)
+        ckpt_dir = os.path.join(base_dir if 'base_dir' in locals() else os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "checkpoints", f"width_{hidden_dim}_{seed_str}")
     os.makedirs(ckpt_dir, exist_ok=True)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    train_graphs, val_graphs, _ = load_datasets(data_dir, smoke_test=args.smoke_test)
+    train_graphs, val_graphs, _ = load_datasets(data_dir, smoke_test=args.smoke_test, ablate_distance=getattr(args, 'ablate_distance', False))
     
     in_channels = train_graphs[0].x.shape[1]
-    assert in_channels == 9, f"Expected 9-dim features (origin-conditioned + distance), but got {in_channels}"
+    expected_dim = 8 if getattr(args, 'ablate_distance', False) else 9
+    assert in_channels == expected_dim, f"Expected {expected_dim}-dim features, but got {in_channels}"
     
     # Batch size 4 prevents OOM on 4GB VRAM while still providing batch stability
     train_loader = DataLoader(train_graphs, batch_size=args.batch_size, shuffle=True)
@@ -207,9 +218,20 @@ def run_training(args):
     
     best_val_auc = 0.0
     first_epoch_loss = None
+    start_epoch = 1
+    
+    if getattr(args, 'resume', False):
+        resume_path = os.path.join(ckpt_dir, "checkpoint_latest.pth")
+        if os.path.exists(resume_path):
+            ckpt = torch.load(resume_path, map_location=device)
+            model.load_state_dict(ckpt['model_state_dict'])
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            start_epoch = ckpt['epoch'] + 1
+            best_val_auc = ckpt['val_auc']
+            print(f"Resuming from epoch {start_epoch-1} with Val AUC {best_val_auc:.4f}")
     
     print("\nStarting Training Loop...")
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         # --- TRAINING ---
         model.train()
         train_clf_tot, train_time_tot, train_rank_tot, train_tot = 0.0, 0.0, 0.0, 0.0
@@ -298,8 +320,8 @@ def run_training(args):
               f"Val Tot: {avg_val_tot:.4f} (Clf: {val_clf_tot/n_val:.4f}, Rank: {val_rank_tot/n_val:.4f}) | "
               f"Val AUC: {val_auc:.4f} | Val P@K: {val_p_k:.4f}")
               
-        ckpt_dir = os.path.join(os.path.dirname(__file__), "..", "checkpoints", f"width_{getattr(args, 'hidden_dim', 64)}_seed_{getattr(args, 'seed', 0)}")
-        os.makedirs(ckpt_dir, exist_ok=True)
+        # ckpt_dir already set at the start of run_training
+        pass
         
         # --- CHECKPOINTING ---
         ckpt_state = {
@@ -350,6 +372,23 @@ def run_training(args):
             sys.exit(1)
         else:
             print(f"\n[PASS] Smoke Test Successful! Loss decreased from {first_epoch_loss:.4f} to {final_epoch_loss:.4f}.")
+            
+    # --- FINAL TEST EVALUATION ---
+    print("\n--- Running Final Evaluation on Test Set ---")
+    _, _, test_graphs = load_datasets(data_dir, smoke_test=args.smoke_test, ablate_distance=getattr(args, 'ablate_distance', False))
+    test_loader = DataLoader(test_graphs, batch_size=1, shuffle=False)
+    
+    # Load the best model
+    best_filename = "best_model_hybrid.pth" if getattr(args, 'train_hybrid', False) else "best_model.pth"
+    best_path = os.path.join(ckpt_dir, best_filename)
+    if os.path.exists(best_path):
+        model.load_state_dict(torch.load(best_path, map_location=device)['model_state_dict'])
+        print(f"Loaded best model from {best_path}")
+    
+    model.eval()
+    test_metrics = evaluate(model, test_loader, device=device)
+    print(f"FINAL TEST AUC: {test_metrics['ROCAUC']:.4f}")
+    print(f"FINAL TEST P@K: {test_metrics['Precision_at_K']:.4f}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -358,11 +397,15 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--num-layers", type=int, default=3, help="Number of GNN message passing layers")
     parser.add_argument('--use-supernode', action='store_true', help='Enable supernode architecture')
+    parser.add_argument('--data-dir', type=str, default=None, help='Override dataset directory')
     parser.add_argument('--train-hybrid', action='store_true', help='Train Phase 1 Hybrid (Edge prediction)')
     parser.add_argument('--lambda-rank', type=float, default=0.0, help='Weight for pairwise ranking loss')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate for Adam optimizer')
     parser.add_argument('--hidden-dim', type=int, default=64, help='Hidden dimension size')
     parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
+    parser.add_argument('--ablate-distance', action='store_true', help='Remove distance feature (Feature 8) for ablation')
+    parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--save-dir', type=str, default=None, help='Specific directory to save checkpoints')
     args = parser.parse_args()
     
     if args.seed is not None:
