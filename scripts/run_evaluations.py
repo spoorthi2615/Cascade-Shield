@@ -60,8 +60,9 @@ def run_all_evaluations(args):
     device = torch.device('cpu')
     hidden_dim = getattr(args, 'hidden_dim', 64)
     model = CascadeNet(in_channels=in_channels, edge_dim=4, hidden_dim=hidden_dim, num_layers=args.num_layers, heads=4, use_supernode=args.use_supernode)
-    best_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "width_64_seed_None", "best_model.pth")
-    ckpt_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "width_64_seed_None", "checkpoint_latest.pth")
+    seed = getattr(args, 'seed', 0)
+    best_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", f"width_64_seed_{seed}", "best_model.pth")
+    ckpt_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", f"width_64_seed_{seed}", "checkpoint_latest.pth")
     
     loaded_path = None
     if os.path.exists(best_path):
@@ -71,7 +72,9 @@ def run_all_evaluations(args):
         
     if loaded_path:
         ckpt = torch.load(loaded_path, map_location=device, weights_only=True)
-        model.load_state_dict(ckpt['model_state_dict'], strict=False)
+        missing, unexpected = model.load_state_dict(ckpt['model_state_dict'], strict=False)
+        print("Missing keys:", missing)
+        print("Unexpected keys:", unexpected)
         print(f"CascadeNet loaded from checkpoint {os.path.basename(loaded_path)} (Epoch {ckpt['epoch']}).")
     else:
         print("WARNING: No CascadeNet checkpoint found. Evaluating untrained architecture.")
@@ -109,19 +112,19 @@ def run_all_evaluations(args):
         b.idx_to_node = idx_to_node
         return b
         
-    seir = init_baseline(ClassicalSEIRPredictor, num_trials=20)
-    seir.is_temporal = True
-    print("\nEvaluating Classical SEIR...")
-    res_seir = evaluate(seir, test_loader, is_baseline=True)
-    results['Classical SEIR'] = res_seir
-    print(res_seir)
+    # seir = init_baseline(ClassicalSEIRPredictor, num_trials=20)
+    # seir.is_temporal = True
+    # print("\nEvaluating Classical SEIR...")
+    # res_seir = evaluate(seir, test_loader, is_baseline=True)
+    # results['Classical SEIR'] = res_seir
+    # print(res_seir)
     
-    from baselines.classical_seir import BlindClassicalSEIRPredictor
-    blind_seir = init_baseline(BlindClassicalSEIRPredictor, num_trials=10)
-    print("\nEvaluating Blind Classical SEIR (Mixture Prior)...")
-    res_blind_seir = evaluate(blind_seir, test_loader, is_baseline=True)
-    results['Blind SEIR'] = res_blind_seir
-    print(res_blind_seir)
+    # from baselines.classical_seir import BlindClassicalSEIRPredictor
+    # blind_seir = init_baseline(BlindClassicalSEIRPredictor, num_trials=10)
+    # print("\nEvaluating Blind Classical SEIR (Mixture Prior)...")
+    # res_blind_seir = evaluate(blind_seir, test_loader, is_baseline=True)
+    # results['Blind SEIR'] = res_blind_seir
+    # print(res_blind_seir)
     
     # GNN-SEIR Hybrid Evaluation (Step 2)
     hybrid_path = os.path.join(os.path.dirname(__file__), "..", "checkpoints", "best_model_hybrid.pth")
@@ -206,29 +209,29 @@ def run_all_evaluations(args):
     results['Isolated Anomaly'] = res_anom
     print(res_anom)
     
-    # Paired Bootstrap Significance Testing against Blind Classical SEIR
-    if 'Blind SEIR' in results:
-        print("\n=== Paired Bootstrap Significance Test (GNN vs. Blind SEIR) ===")
+    # Paired Bootstrap Significance Testing against Naive Distance
+    if 'Naive Distance' in results:
+        print("\n=== Paired Bootstrap Significance Test (GNN vs. Naive Distance) ===")
         
         # Precompute predictions on all test graphs to speed up bootstrapping
         print("Precomputing predictions...")
         true_labels_list = []
-        pred_base_list = []  # Will store Blind SEIR predictions
+        pred_base_list = []  # Will store Naive Distance predictions
         pred_new_list = []   # Will store CascadeNet predictions
         
         for g in test_graphs:
             g = g.to(device)
-            # Call Blind SEIR predict
-            # We map origin node name just to satisfy the predict contract (ignored internally by Blind SEIR)
+            # Call Naive Distance predict
+            # We map origin node name just to satisfy the predict contract
             valid_times = g.y_time.clone()
             valid_times[g.y_time < 0] = float('inf')
             origin_idx = torch.argmin(valid_times).item()
-            origin_name = blind_seir.idx_to_node[origin_idx]
+            origin_name = naive_dist.idx_to_node[origin_idx]
             
-            risk_dict = blind_seir.predict(blind_seir.G, origin_name)
+            risk_dict = naive_dist.predict(naive_dist.G, origin_name)
             pred_base = torch.zeros(g.num_nodes, dtype=torch.float)
             for name, score in risk_dict.items():
-                idx = blind_seir.node_to_idx[name]
+                idx = naive_dist.node_to_idx[name]
                 pred_base[idx] = score
                 
             with torch.no_grad():
@@ -275,7 +278,7 @@ def run_all_evaluations(args):
                     
             delta_pks.append(np.mean(pk_new_scores) - np.mean(pk_base_scores))
             
-        print(f"Point Estimate baseline AUC: {res_blind_seir.get('ROCAUC', 0.0):.4f}")
+        print(f"Point Estimate baseline AUC: {res_naive_dist.get('ROCAUC', 0.0):.4f}")
         print(f"Point Estimate new AUC:      {res_cas.get('ROCAUC', 0.0):.4f}")
         
         ci_auc = (np.percentile(delta_aucs, 2.5), np.percentile(delta_aucs, 97.5))
@@ -383,6 +386,7 @@ if __name__ == "__main__":
     parser.add_argument('--use-supernode', action='store_true', help='Use supernode architecture')
     parser.add_argument('--hidden-dim', type=int, default=64, help='Hidden dimension size')
     parser.add_argument('--data-dir', type=str, default=None, help='Dataset directory')
+    parser.add_argument('--seed', type=int, default=0, help='Seed for checkpoint')
     args = parser.parse_args()
     
     run_all_evaluations(args)

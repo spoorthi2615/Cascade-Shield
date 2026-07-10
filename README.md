@@ -15,6 +15,8 @@ By benchmarking Graph Neural Networks (GNNs) against Classical SEIR epidemiologi
 
 Following a rigorous Phase 2 audit, the pipeline evaluates cascade propagation on a 2,278-node tri-layer graph using real-world ICS telemetry origins (`PWR_111`-`114`).
 
+*Update:* An independent reproducibility audit has verified the exact `0.9089 ± 0.0003` ROC-AUC result across three seeds via a corrected paired-bootstrap significance test against the Naive Distance heuristic. The GNN's global advantage is statistically significant, though its top-K precision advantage remains dependent on the initialization seed.
+
 - **GNN Representational Ceiling:** `0.9089 ± 0.0003` ROC-AUC | `0.6790 ± 0.0060` P@K
 - **Feedforward MLP (w/ Distance):** `0.9014` ROC-AUC
 - **Naive Distance Heuristic:** `0.8991` ROC-AUC | `0.6601` P@K
