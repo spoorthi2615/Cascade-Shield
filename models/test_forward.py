@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models.cascade_net import CascadeNet
 from models.loss import FocalLoss, masked_mse_loss
+from models.train import add_distance_feature
 
 def run_forward_test():
     print("--- Running Forward Pass Verification ---")
@@ -19,10 +20,12 @@ def run_forward_test():
         
     # We must use weights_only=False because PyG Data objects are loaded
     sample = torch.load(file_path, weights_only=False)
+    # Apply distance feature to match the 9-dim input schema
+    sample = add_distance_feature(sample)
     num_nodes = sample.x.shape[0]
     
-    # 2. Instantiate CascadeNet
-    model = CascadeNet(in_channels=7, edge_dim=4, hidden_dim=64, num_layers=3, heads=4)
+    # 2. Instantiate CascadeNet (9-dim inputs)
+    model = CascadeNet(in_channels=9, edge_dim=4, hidden_dim=64, num_layers=3, heads=4)
     model.eval()
     
     # 3. Run Forward Pass

@@ -12,3 +12,23 @@ venv/
 *.pt
 *.zip
 .DS_Store
+
+# Documents, Papers and Reports
+*.docx
+*.pdf
+*.tex
+*.md
+!README.md
+!REPRODUCIBILITY.md
+
+# Logs and temporary files
+*.log
+*.txt
+*.csv
+twin_out.txt
+eval_out.txt
+
+# Quarantine and checkpoints
+unverified_quarantine/
+checkpoints/
+cache/

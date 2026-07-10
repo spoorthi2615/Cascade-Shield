@@ -16,7 +16,7 @@ def test_checkpoint():
     
     # 1. Instantiate fresh model and optimizer
     device = torch.device("cpu")
-    model = CascadeNet(in_channels=7, edge_dim=4, hidden_dim=64, num_layers=3, heads=4).to(device)
+    model = CascadeNet(in_channels=9, edge_dim=4, hidden_dim=64, num_layers=3, heads=4).to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     
     # 2. Load state
@@ -33,7 +33,7 @@ def test_checkpoint():
     print(f"[PASS] Best Val Loss recorded: {best_val:.4f}")
     
     # 3. Quick forward pass to ensure weights aren't corrupt
-    dummy_x = torch.zeros((10, 7))
+    dummy_x = torch.zeros((10, 9))
     dummy_edge_index = torch.zeros((2, 0), dtype=torch.long)
     dummy_edge_attr = torch.zeros((0, 4))
     
